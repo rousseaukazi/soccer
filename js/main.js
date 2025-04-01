@@ -1753,13 +1753,16 @@ function kickBall() {
     }
 }
 
-// Create a stylized welcome button with dark gold color
+// Create a stylized welcome button with clean dark gold color (no white shader)
 function createWelcomeButton() {
     // Create a canvas for the button texture
     const canvas = document.createElement('canvas');
     canvas.width = 1200; // Wider canvas for more padding
     canvas.height = 600; // Taller canvas for bigger text
     const context = canvas.getContext('2d');
+    
+    // Clear the canvas completely first
+    context.clearRect(0, 0, canvas.width, canvas.height);
     
     // Button background - rounded rectangle with dark gold gradient
     const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
@@ -1770,7 +1773,7 @@ function createWelcomeButton() {
     const cornerRadius = 60; // Larger corner radius
     const padding = 80; // Significant padding around the edges
     
-    context.fillStyle = gradient;
+    // Draw the button shape
     context.beginPath();
     context.moveTo(cornerRadius, 0);
     context.lineTo(canvas.width - cornerRadius, 0);
@@ -1782,23 +1785,9 @@ function createWelcomeButton() {
     context.lineTo(0, cornerRadius);
     context.quadraticCurveTo(0, 0, cornerRadius, 0);
     context.closePath();
-    context.fill();
     
-    // Add a metallic highlight for gold effect
-    const highlightGradient = context.createLinearGradient(0, padding, 0, canvas.height * 0.4);
-    highlightGradient.addColorStop(0, 'rgba(255, 255, 220, 0.4)');
-    highlightGradient.addColorStop(1, 'rgba(255, 255, 220, 0)');
-    
-    context.fillStyle = highlightGradient;
-    context.beginPath();
-    context.moveTo(cornerRadius, padding);
-    context.lineTo(canvas.width - cornerRadius, padding);
-    context.quadraticCurveTo(canvas.width - padding, padding, canvas.width - padding, cornerRadius);
-    context.lineTo(canvas.width - padding, canvas.height * 0.4);
-    context.lineTo(padding, canvas.height * 0.4);
-    context.lineTo(padding, cornerRadius);
-    context.quadraticCurveTo(padding, padding, cornerRadius, padding);
-    context.closePath();
+    // Fill with gradient
+    context.fillStyle = gradient;
     context.fill();
     
     // Add a subtle shadow for depth
@@ -1890,7 +1879,7 @@ function createWelcomeButton() {
     // Add to scene
     scene.add(button);
     
-    console.log("Welcome button created with dark gold color");
+    console.log("Welcome button created with clean dark gold color (no white shader)");
     
     // Add a pulsing effect to make it more noticeable
     addButtonPulseEffect(button);
