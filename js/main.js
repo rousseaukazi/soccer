@@ -42,6 +42,10 @@ const ballKickTime = 800;   // Ball is kicked after 0.8 seconds
 const duckReactTime = 1300; // Duck reacts after 1.3 seconds
 const sequenceEndTime = 3000; // Sequence ends after 3 seconds
 
+// Store the default camera position and target
+const defaultCameraPosition = new THREE.Vector3(-9.22, 1.39, -3.65);
+const defaultCameraTarget = new THREE.Vector3(0, 1, 0);
+
 // Initialize the scene
 function init() {
     // Create scene
@@ -49,8 +53,8 @@ function init() {
     
     // Create camera with updated settings
     camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(-9.22, 1.39, -3.65);
-    camera.lookAt(new THREE.Vector3(0, 1, 0));
+    camera.position.copy(defaultCameraPosition);
+    camera.lookAt(defaultCameraTarget);
     
     // Create renderer with improved settings
     renderer = new THREE.WebGLRenderer({ 
@@ -69,11 +73,17 @@ function init() {
     renderer.setPixelRatio(window.devicePixelRatio); // Use device pixel ratio for sharper rendering
     document.body.appendChild(renderer.domElement);
     
-    // Create controls
+    // Create controls with restricted movement
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.target.set(0, 1, 0); // Set the look target
+    controls.target.copy(defaultCameraTarget);
+    
+    // Restrict controls to only allow rotation (no zoom or tilt)
+    controls.enableZoom = false;      // Disable zooming
+    controls.minPolarAngle = Math.PI / 2; // Restrict to horizontal rotation only
+    controls.maxPolarAngle = Math.PI / 2; // Restrict to horizontal rotation only
+    
     controls.update();
     
     // Create clock for animations
@@ -83,6 +93,7 @@ function init() {
     createCartoonySky(); // Add the cartoony sky with double clouds
     createCarpetFloor(); // Create carpet floor instead of grass
     createLights();
+    createWelcomeButton(); // Add the welcome button
     
     // Load models
     loadPigModel();
@@ -127,6 +138,34 @@ function animate() {
                 const floatY = Math.sin((elapsedTime + child.userData.startTime) * child.userData.speed) 
                     * child.userData.amplitude * child.userData.direction;
                 child.position.y = child.userData.startY + floatY;
+            }
+        }
+        
+        // Update welcome button
+        if (child.name === 'welcomeButton') {
+            // Make button always face camera
+            child.lookAt(camera.position);
+            
+            // Apply floating animation
+            if (child.userData) {
+                const floatY = Math.sin(elapsedTime * child.userData.speed) 
+                    * child.userData.amplitude;
+                child.position.y = child.userData.startY + floatY;
+                
+                // Apply pulsing effect
+                if (child.userData.timeline && child.userData.timeline.pulsing) {
+                    child.userData.timeline.time += delta * 1000;
+                    if (child.userData.timeline.time > child.userData.timeline.duration) {
+                        child.userData.timeline.time = 0;
+                    }
+                    
+                    const progress = child.userData.timeline.time / child.userData.timeline.duration;
+                    const scale = child.userData.timeline.startScale + 
+                        (child.userData.timeline.endScale - child.userData.timeline.startScale) * 
+                        (0.5 - 0.5 * Math.cos(progress * Math.PI * 2));
+                    
+                    child.scale.set(scale, scale, 1);
+                }
             }
         }
     });
@@ -597,6 +636,12 @@ function updateActiveDuckAnimationText(animationName) {
 
 // Handle keyboard input
 function onKeyDown(event) {
+    // Check if key is spacebar for resetting camera
+    if (event.code === 'Space') {
+        resetCameraPosition();
+        return;
+    }
+    
     // Check if key is 'b' for toggling ball visibility
     if (event.key.toLowerCase() === 'b') {
         showBall = !showBall;
@@ -652,6 +697,32 @@ function onKeyDown(event) {
     
     // Check if key is 's' for starting the action sequence
     if (event.key.toLowerCase() === 's') {
+        // Hide the welcome button when starting the action
+        scene.children.forEach(child => {
+            if (child.name === 'welcomeButton') {
+                // Fade out animation
+                const fadeOutDuration = 1000; // 1 second
+                const startTime = Date.now();
+                
+                function fadeOut() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / fadeOutDuration, 1);
+                    
+                    if (child.material) {
+                        child.material.opacity = 1 - progress;
+                    }
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(fadeOut);
+                    } else {
+                        child.visible = false;
+                    }
+                }
+                
+                fadeOut();
+            }
+        });
+        
         startActionSequence();
     }
     
@@ -1680,4 +1751,208 @@ function kickBall() {
         
         console.log("Ball kicked with smooth arc");
     }
+}
+
+// Create a stylized welcome button with dark gold color
+function createWelcomeButton() {
+    // Create a canvas for the button texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200; // Wider canvas for more padding
+    canvas.height = 600; // Taller canvas for bigger text
+    const context = canvas.getContext('2d');
+    
+    // Button background - rounded rectangle with dark gold gradient
+    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#D4AF37');  // Gold top
+    gradient.addColorStop(1, '#996515');  // Darker gold/bronze bottom
+    
+    // Draw rounded rectangle for button with padding
+    const cornerRadius = 60; // Larger corner radius
+    const padding = 80; // Significant padding around the edges
+    
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.moveTo(cornerRadius, 0);
+    context.lineTo(canvas.width - cornerRadius, 0);
+    context.quadraticCurveTo(canvas.width, 0, canvas.width, cornerRadius);
+    context.lineTo(canvas.width, canvas.height - cornerRadius);
+    context.quadraticCurveTo(canvas.width, canvas.height, canvas.width - cornerRadius, canvas.height);
+    context.lineTo(cornerRadius, canvas.height);
+    context.quadraticCurveTo(0, canvas.height, 0, canvas.height - cornerRadius);
+    context.lineTo(0, cornerRadius);
+    context.quadraticCurveTo(0, 0, cornerRadius, 0);
+    context.closePath();
+    context.fill();
+    
+    // Add a metallic highlight for gold effect
+    const highlightGradient = context.createLinearGradient(0, padding, 0, canvas.height * 0.4);
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 220, 0.4)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 220, 0)');
+    
+    context.fillStyle = highlightGradient;
+    context.beginPath();
+    context.moveTo(cornerRadius, padding);
+    context.lineTo(canvas.width - cornerRadius, padding);
+    context.quadraticCurveTo(canvas.width - padding, padding, canvas.width - padding, cornerRadius);
+    context.lineTo(canvas.width - padding, canvas.height * 0.4);
+    context.lineTo(padding, canvas.height * 0.4);
+    context.lineTo(padding, cornerRadius);
+    context.quadraticCurveTo(padding, padding, cornerRadius, padding);
+    context.closePath();
+    context.fill();
+    
+    // Add a subtle shadow for depth
+    context.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    context.shadowBlur = 15;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 10;
+    
+    // Reset shadow for text
+    context.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    context.shadowBlur = 5;
+    context.shadowOffsetX = 2;
+    context.shadowOffsetY = 2;
+    
+    // Calculate safe text area with padding
+    const textAreaWidth = canvas.width - (padding * 2);
+    const textAreaHeight = canvas.height - (padding * 2);
+    const textCenterX = canvas.width / 2;
+    const textCenterY = canvas.height / 2;
+    
+    // Add welcome text with much bigger font
+    context.fillStyle = 'white';
+    context.font = 'bold 100px Arial, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    // Measure text to ensure it fits within padding
+    let welcomeText = 'Welcome to Office Soccer!';
+    let textWidth = context.measureText(welcomeText).width;
+    
+    // If text is too wide, reduce font size until it fits
+    let welcomeFontSize = 100;
+    while (textWidth > textAreaWidth && welcomeFontSize > 60) {
+        welcomeFontSize -= 5;
+        context.font = `bold ${welcomeFontSize}px Arial, sans-serif`;
+        textWidth = context.measureText(welcomeText).width;
+    }
+    
+    // Draw the welcome text
+    context.fillText(welcomeText, textCenterX, textCenterY - 80);
+    
+    // Add instruction text with bigger font
+    let instructionFontSize = 80;
+    context.font = `bold ${instructionFontSize}px Arial, sans-serif`;
+    
+    // Measure instruction text
+    let instructionText = 'Press S to Shoot';
+    textWidth = context.measureText(instructionText).width;
+    
+    // If text is too wide, reduce font size until it fits
+    while (textWidth > textAreaWidth && instructionFontSize > 50) {
+        instructionFontSize -= 5;
+        context.font = `bold ${instructionFontSize}px Arial, sans-serif`;
+        textWidth = context.measureText(instructionText).width;
+    }
+    
+    // Draw the instruction text
+    context.fillText(instructionText, textCenterX, textCenterY + 80);
+    
+    // Create a texture from the canvas
+    const buttonTexture = new THREE.CanvasTexture(canvas);
+    
+    // Create a material with the button texture
+    const buttonMaterial = new THREE.MeshBasicMaterial({
+        map: buttonTexture,
+        transparent: true,
+        side: THREE.DoubleSide
+    });
+    
+    // Create a plane for the button - wider to match the new aspect ratio
+    const buttonGeometry = new THREE.PlaneGeometry(5, 2.5); // Adjusted for new canvas dimensions
+    const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    
+    // Position the button in front of the camera
+    button.position.set(0, 2, 0); // Centered and above the floor
+    button.name = 'welcomeButton';
+    
+    // Make the button always face the camera
+    button.lookAt(camera.position);
+    
+    // Add a slight floating animation
+    button.userData = {
+        startY: 2,
+        amplitude: 0.1,
+        speed: 0.001,
+        startTime: 0
+    };
+    
+    // Add to scene
+    scene.add(button);
+    
+    console.log("Welcome button created with dark gold color");
+    
+    // Add a pulsing effect to make it more noticeable
+    addButtonPulseEffect(button);
+}
+
+// Add a pulsing effect to the button
+function addButtonPulseEffect(button) {
+    // Create a timeline for the animation
+    const timeline = {
+        time: 0,
+        duration: 2000, // 2 seconds per pulse
+        startScale: 1.0,
+        endScale: 1.1,
+        pulsing: true
+    };
+    
+    // Store the timeline on the button
+    button.userData.timeline = timeline;
+}
+
+// Reset camera to default position
+function resetCameraPosition() {
+    // Create a smooth transition
+    const startPosition = camera.position.clone();
+    const startTarget = controls.target.clone();
+    const startTime = Date.now();
+    const duration = 1000; // 1 second transition
+    
+    function updateCameraPosition() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Use easeInOutCubic for smooth transition
+        const easeProgress = progress < 0.5 
+            ? 4 * progress * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        
+        // Interpolate position
+        camera.position.lerpVectors(
+            startPosition, 
+            defaultCameraPosition,
+            easeProgress
+        );
+        
+        // Interpolate target
+        controls.target.lerpVectors(
+            startTarget,
+            defaultCameraTarget,
+            easeProgress
+        );
+        
+        // Update controls
+        controls.update();
+        
+        // Continue animation if not complete
+        if (progress < 1) {
+            requestAnimationFrame(updateCameraPosition);
+        } else {
+            console.log("Camera reset to default position");
+        }
+    }
+    
+    // Start the transition
+    updateCameraPosition();
 }
