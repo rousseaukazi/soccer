@@ -59,7 +59,7 @@ function init() {
         alpha: true
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x87CEEB); // Sky blue background
+    renderer.setClearColor(0x64B5F6); // Light blue
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
     renderer.physicallyCorrectLights = true;
@@ -76,17 +76,13 @@ function init() {
     controls.target.set(0, 1, 0); // Set the look target
     controls.update();
     
-    // Create a clock for animations
+    // Create clock for animations
     clock = new THREE.Clock();
     
-    // Add lights
+    // Create scene elements
+    createCartoonySky(); // Add the cartoony sky with double clouds
+    createCarpetFloor(); // Create carpet floor instead of grass
     createLights();
-    
-    // Create ground
-    createGround();
-    
-    // Create sky
-    createCartoonySky();
     
     // Load models
     loadPigModel();
@@ -94,17 +90,15 @@ function init() {
     loadBallModel();
     loadNetModel();
     
-    // Create controls panel
+    // Create control panel
     createControlsPanel();
     
     // Add event listeners
-    window.addEventListener('resize', onWindowResize, false);
-    document.addEventListener('keydown', onKeyDown, false);
+    window.addEventListener('resize', onWindowResize);
+    window.addEventListener('keydown', onKeyDown);
     
     // Start animation loop
     animate();
-    
-    console.log("Scene initialized with ground, sky, ball, net, and controls");
 }
 
 // Animation loop
@@ -113,6 +107,7 @@ function animate() {
     
     // Get delta time
     const delta = clock.getDelta();
+    const elapsedTime = clock.getElapsedTime();
     
     // Update controls
     controls.update();
@@ -120,6 +115,21 @@ function animate() {
     // Update animations
     if (pigMixer) pigMixer.update(delta);
     if (duckMixer) duckMixer.update(delta);
+    
+    // Update clouds to always face camera and float
+    scene.children.forEach(child => {
+        if (child.name && child.name.startsWith('cloud_')) {
+            // Make cloud always face camera
+            child.lookAt(camera.position);
+            
+            // Apply floating animation
+            if (child.userData) {
+                const floatY = Math.sin((elapsedTime + child.userData.startTime) * child.userData.speed) 
+                    * child.userData.amplitude * child.userData.direction;
+                child.position.y = child.userData.startY + floatY;
+            }
+        }
+    });
     
     // Update ball animation if active
     if (ballAnimating) {
@@ -972,70 +982,282 @@ function createLights() {
     console.log("Enhanced lighting created");
 }
 
-// Create ground plane
-function createGround() {
-    // Create a large ground plane
-    const groundGeometry = new THREE.PlaneGeometry(50, 50);
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x7CFC00, // Lawn green
-        roughness: 0.8,
-        metalness: 0.2
+// Create a light carpet floor instead of grass
+function createCarpetFloor() {
+    // Remove any existing floor
+    scene.children.forEach(child => {
+        if (child.name === 'floor') {
+            scene.remove(child);
+        }
     });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     
-    // Rotate and position the ground
-    ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-    ground.position.y = -0.01; // Slightly below zero to avoid z-fighting
+    // Create a texture for a light carpet
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const context = canvas.getContext('2d');
     
-    // Enable shadows
-    ground.receiveShadow = true;
+    // Base color - light beige/cream
+    context.fillStyle = '#F5F0E6';
+    context.fillRect(0, 0, canvas.width, canvas.height);
     
-    scene.add(ground);
+    // Add a subtle carpet pattern
+    context.fillStyle = '#EAE5DB'; // Slightly darker for pattern
     
-    console.log("Ground created");
+    // Create a grid pattern for carpet texture
+    const gridSize = 16;
+    for (let x = 0; x < canvas.width; x += gridSize) {
+        for (let y = 0; y < canvas.height; y += gridSize) {
+            // Alternate pattern
+            if ((x / gridSize + y / gridSize) % 2 === 0) {
+                context.fillRect(x, y, gridSize, gridSize);
+            }
+        }
+    }
+    
+    // Add some random specks for texture
+    context.fillStyle = '#F8F4EA'; // Lighter specks
+    for (let i = 0; i < 5000; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = 1 + Math.random();
+        context.fillRect(x, y, size, size);
+    }
+    
+    // Create a few subtle circular patterns
+    context.fillStyle = '#E8E3D9'; // Slightly darker for circular patterns
+    for (let i = 0; i < 20; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const radius = 10 + Math.random() * 30;
+        
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+    }
+    
+    // Create a texture from the canvas
+    const carpetTexture = new THREE.CanvasTexture(canvas);
+    carpetTexture.wrapS = THREE.RepeatWrapping;
+    carpetTexture.wrapT = THREE.RepeatWrapping;
+    carpetTexture.repeat.set(8, 8); // Repeat the texture
+    
+    // Create a floor material with the carpet texture
+    const floorMaterial = new THREE.MeshStandardMaterial({
+        map: carpetTexture,
+        roughness: 0.8, // Carpet is not shiny
+        metalness: 0.0, // Not metallic at all
+        color: 0xffffff // White to let the texture show through
+    });
+    
+    // Create a ground plane
+    const floorGeometry = new THREE.PlaneGeometry(30, 30);
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.name = 'floor';
+    
+    // Rotate and position the floor
+    floor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+    floor.position.y = -0.01; // Slightly below zero to avoid z-fighting
+    floor.receiveShadow = true;
+    
+    // Add to scene
+    scene.add(floor);
+    
+    console.log("Created light carpet floor");
 }
 
-// Create a cartoony sky with gradient
+// Create a bright, cheerful cartoony sky with stylized clouds
 function createCartoonySky() {
-    // Create a large sphere for the sky
-    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-    
-    // Create a shader material with a gradient
-    const skyMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-            topColor: { value: new THREE.Color(0x0077ff) },  // Blue
-            bottomColor: { value: new THREE.Color(0xffffff) }, // White
-            offset: { value: 33 },
-            exponent: { value: 0.6 }
-        },
-        vertexShader: `
-            varying vec3 vWorldPosition;
-            void main() {
-                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-                vWorldPosition = worldPosition.xyz;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-        fragmentShader: `
-            uniform vec3 topColor;
-            uniform vec3 bottomColor;
-            uniform float offset;
-            uniform float exponent;
-            varying vec3 vWorldPosition;
-            void main() {
-                float h = normalize(vWorldPosition + offset).y;
-                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
-            }
-        `,
-        side: THREE.BackSide
+    // Remove any existing sky and clouds
+    scene.children.forEach(child => {
+        if (child.name === 'cartoonSky' || child.name.startsWith('cloud_')) {
+            scene.remove(child);
+        }
     });
     
-    // Create the sky mesh
+    // Create a simple sky dome with a gradient
+    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+    skyGeometry.scale(-1, 1, 1); // Flip inside out
+    
+    // Create a gradient material for the sky
+    const skyMaterial = new THREE.MeshBasicMaterial({
+        color: 0x64B5F6, // Light blue
+        side: THREE.BackSide,
+    });
+    
     const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+    sky.name = 'cartoonSky';
     scene.add(sky);
     
-    console.log("Cartoony sky created");
-    return sky;
+    // Update the renderer background color to match
+    renderer.setClearColor(0x64B5F6);
+    
+    // Now add cartoony clouds
+    addStylizedCartoonClouds();
+    
+    console.log("Cheerful cartoony sky created with stylized cartoon clouds");
+}
+
+// Add stylized cartoon clouds - now with twice as many!
+function addStylizedCartoonClouds() {
+    // Create a cloud texture with a more cartoony style
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    
+    // Clear canvas
+    context.fillStyle = 'rgba(0, 0, 0, 0)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Function to draw a cartoony cloud
+    function drawCartoonCloud(ctx, x, y, width, height) {
+        // Draw the base of the cloud
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(x, y + height * 0.6);
+        
+        // Bottom edge with slight curves
+        ctx.bezierCurveTo(
+            x + width * 0.1, y + height * 0.7,
+            x + width * 0.9, y + height * 0.7,
+            x + width, y + height * 0.6
+        );
+        
+        // Right side
+        ctx.bezierCurveTo(
+            x + width * 1.05, y + height * 0.4,
+            x + width * 0.95, y + height * 0.2,
+            x + width * 0.9, y + height * 0.25
+        );
+        
+        // Top bumps (cartoony cloud puffs)
+        // First puff
+        ctx.bezierCurveTo(
+            x + width * 0.85, y,
+            x + width * 0.65, y,
+            x + width * 0.6, y + height * 0.25
+        );
+        
+        // Second puff
+        ctx.bezierCurveTo(
+            x + width * 0.55, y - height * 0.1,
+            x + width * 0.45, y - height * 0.1,
+            x + width * 0.4, y + height * 0.2
+        );
+        
+        // Third puff
+        ctx.bezierCurveTo(
+            x + width * 0.35, y - height * 0.05,
+            x + width * 0.25, y - height * 0.05,
+            x + width * 0.2, y + height * 0.25
+        );
+        
+        // Left side
+        ctx.bezierCurveTo(
+            x + width * 0.1, y + height * 0.2,
+            x - width * 0.05, y + height * 0.4,
+            x, y + height * 0.6
+        );
+        
+        ctx.closePath();
+        ctx.fill();
+        
+        // Add some highlight for depth
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.arc(x + width * 0.25, y + height * 0.3, width * 0.15, 0, Math.PI * 2);
+        ctx.arc(x + width * 0.55, y + height * 0.2, width * 0.15, 0, Math.PI * 2);
+        ctx.arc(x + width * 0.75, y + height * 0.3, width * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Add a subtle outline for a more cartoony look
+        ctx.strokeStyle = 'rgba(220, 220, 255, 0.8)';
+        ctx.lineWidth = width * 0.03;
+        ctx.stroke();
+    }
+    
+    // Draw the main cloud
+    drawCartoonCloud(context, 50, 100, 400, 150);
+    
+    // Create a texture from the canvas
+    const cloudTexture = new THREE.CanvasTexture(canvas);
+    cloudTexture.premultiplyAlpha = true;
+    
+    // Create a material that uses the cloud texture
+    const cloudMaterial = new THREE.MeshBasicMaterial({
+        map: cloudTexture,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    
+    // Create cloud positions around the scene - DOUBLED!
+    const cloudPositions = [
+        // Original positions
+        { x: 20, y: 15, z: -30, scale: 10, rotation: 0.1 },
+        { x: -25, y: 18, z: -20, scale: 12, rotation: -0.2 },
+        { x: 15, y: 12, z: 25, scale: 8, rotation: 0.15 },
+        { x: -15, y: 20, z: 30, scale: 14, rotation: -0.1 },
+        { x: 30, y: 25, z: 10, scale: 16, rotation: 0.05 },
+        { x: -30, y: 15, z: -10, scale: 10, rotation: -0.15 },
+        { x: 0, y: 30, z: -40, scale: 18, rotation: 0 },
+        { x: -40, y: 20, z: 0, scale: 12, rotation: 0.2 },
+        { x: 40, y: 18, z: 0, scale: 14, rotation: -0.05 },
+        { x: 0, y: 25, z: 40, scale: 16, rotation: 0.1 },
+        { x: 20, y: 35, z: 20, scale: 20, rotation: -0.1 },
+        { x: -20, y: 30, z: -25, scale: 18, rotation: 0.05 },
+        
+        // Additional positions (doubled)
+        { x: 10, y: 22, z: -35, scale: 11, rotation: -0.15 },
+        { x: -35, y: 16, z: -15, scale: 13, rotation: 0.1 },
+        { x: 25, y: 14, z: 15, scale: 9, rotation: -0.2 },
+        { x: -5, y: 18, z: 35, scale: 15, rotation: 0.05 },
+        { x: 35, y: 28, z: 5, scale: 17, rotation: -0.1 },
+        { x: -20, y: 13, z: -5, scale: 11, rotation: 0.2 },
+        { x: 5, y: 35, z: -30, scale: 19, rotation: -0.05 },
+        { x: -30, y: 22, z: 10, scale: 13, rotation: -0.15 },
+        { x: 30, y: 16, z: -10, scale: 15, rotation: 0.1 },
+        { x: 10, y: 28, z: 30, scale: 17, rotation: -0.05 },
+        { x: 15, y: 38, z: 15, scale: 21, rotation: 0.15 },
+        { x: -15, y: 33, z: -20, scale: 19, rotation: -0.1 }
+    ];
+    
+    // Create cloud billboards
+    cloudPositions.forEach((pos, index) => {
+        // Create a plane for the cloud
+        const cloudGeometry = new THREE.PlaneGeometry(1, 0.5); // Aspect ratio matches our texture
+        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial.clone());
+        
+        // Position and scale the cloud
+        cloud.position.set(pos.x, pos.y, pos.z);
+        cloud.scale.set(pos.scale, pos.scale, 1);
+        cloud.name = `cloud_${index}`;
+        
+        // Make the cloud always face the camera but with a slight rotation for variety
+        cloud.lookAt(camera.position);
+        cloud.rotation.z = pos.rotation;
+        
+        // Add to scene
+        scene.add(cloud);
+        
+        // Add a simple animation to make the cloud float
+        const speed = 0.0005 + Math.random() * 0.001; // Slower, gentler movement
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        const amplitude = 0.3 + Math.random() * 0.7; // Smaller amplitude for subtle movement
+        const startY = pos.y;
+        
+        // Store animation properties on the cloud object
+        cloud.userData = {
+            speed: speed,
+            direction: direction,
+            amplitude: amplitude,
+            startY: startY,
+            startTime: Math.random() * 1000 // Random start time for varied movement
+        };
+    });
+    
+    console.log("Added double the stylized cartoon clouds");
 }
 
 // Create a simple ball (fallback)
