@@ -1834,7 +1834,7 @@ function createWelcomeButton() {
     context.font = `bold ${instructionFontSize}px Arial, sans-serif`;
     
     // Measure instruction text
-    let instructionText = 'Press S to Shoot';
+    let instructionText = 'Press S to start';
     textWidth = context.measureText(instructionText).width;
     
     // If text is too wide, reduce font size until it fits
